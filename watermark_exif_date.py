@@ -12,6 +12,7 @@ Features:
 from __future__ import annotations
 
 import argparse
+import time
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -100,14 +101,20 @@ def iter_image_files(path: Path) -> Iterable[Path]:
 
 
 def extract_exif_date(image: Image.Image) -> Optional[str]:
+    init_date = time.strftime("%Y:%M:%D %H:%M:%S", time.localtime())
+
     try:
         exif = image.getexif()
     except Exception:
-        return None
+        return init_date
     if not exif:
-        return None
+        return init_date
 
-    for tag in (EXIF_TAG_DATETIME_ORIGINAL, EXIF_TAG_DATETIME_DIGITIZED, EXIF_TAG_DATETIME):
+    for tag in (
+        EXIF_TAG_DATETIME_ORIGINAL,
+        EXIF_TAG_DATETIME_DIGITIZED,
+        EXIF_TAG_DATETIME,
+    ):
         value = exif.get(tag)
         if not value:
             continue
@@ -128,28 +135,36 @@ def extract_exif_date(image: Image.Image) -> Optional[str]:
             try:
                 # Some cameras might store like YYYY-MM-DD already
                 if ":" in parts[0]:
-                    datetime.strptime(parts[0], "%Y:%m:%d%H:%M:%S" if len(parts) == 1 else "%Y:%m:%d")
+                    datetime.strptime(
+                        parts[0], "%Y:%m:%d%H:%M:%S" if len(parts) == 1 else "%Y:%m:%d"
+                    )
                 else:
                     datetime.strptime(date_str, "%Y-%m-%d")
             except Exception:
                 # Best-effort: still return transformed date part
                 pass
             return date_str
-    return None
+    return init_date
 
 
-def load_font(font_path: Optional[Path], font_size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+def load_font(
+    font_path: Optional[Path], font_size: int
+) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     if font_path is not None:
         try:
             return ImageFont.truetype(str(font_path), font_size)
         except Exception as exc:
-            print(f"[WARN] Failed to load font '{font_path}': {exc}. Falling back to default font.")
+            print(
+                f"[WARN] Failed to load font '{font_path}': {exc}. Falling back to default font."
+            )
     # Fallback default font
     try:
         return ImageFont.load_default()
     except Exception:
         # As a last resort, try a common system font (may not exist)
-        return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+        return ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size
+        )
 
 
 def compute_position(
@@ -192,13 +207,17 @@ def draw_watermark(
     # Use textbbox for accurate metrics
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    x, y = compute_position(img.size, (text_w, text_h), options.position, options.margin)
+    x, y = compute_position(
+        img.size, (text_w, text_h), options.position, options.margin
+    )
 
     # Optional subtle shadow for visibility
     shadow_offset = max(1, options.font_size // 24)
     shadow_color = (0, 0, 0, 160)
     try:
-        draw.text((x + shadow_offset, y + shadow_offset), text, font=font, fill=shadow_color)
+        draw.text(
+            (x + shadow_offset, y + shadow_offset), text, font=font, fill=shadow_color
+        )
     except Exception:
         pass
     draw.text((x, y), text, font=font, fill=text_color)
@@ -213,7 +232,9 @@ def ensure_output_dir(base: Path) -> Path:
     return out_dir
 
 
-def process_image_file(image_path: Path, options: WatermarkOptions, out_dir: Path) -> None:
+def process_image_file(
+    image_path: Path, options: WatermarkOptions, out_dir: Path
+) -> None:
     try:
         with Image.open(image_path) as im:
             date_text = extract_exif_date(im)
@@ -253,7 +274,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         print("No supported image files found.")
         return 1
 
-    out_dir = ensure_output_dir(input_path if input_path.is_dir() else input_path.parent)
+    out_dir = ensure_output_dir(
+        input_path if input_path.is_dir() else input_path.parent
+    )
     for f in files:
         process_image_file(f, options, out_dir)
     return 0
@@ -261,5 +284,3 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
